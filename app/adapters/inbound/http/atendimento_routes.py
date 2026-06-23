@@ -1,0 +1,113 @@
+from uuid import UUID
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy.orm import Session
+from app.infrastructure.database import get_db
+from app.infrastructure.security import get_current_user, require_admin
+from app.adapters.inbound.http.atendimento_schemas import (
+    OSCreate, OSResponse, OSStatusUpdate, ClienteAprovacao,
+)
+from app.adapters.outbound.persistence.os_repository import OSRepositoryAdapter
+from app.adapters.outbound.persistence.catalogo_repository import CatalogoRepositoryAdapter
+from app.adapters.outbound.persistence.estoque_repository import EstoqueRepositoryAdapter
+from app.adapters.outbound.persistence.cliente_repository import ClienteRepositoryAdapter
+from app.application.use_cases.criar_os import CriarOSUseCase
+from app.application.use_cases.listar_os import ListarOSUseCase
+from app.application.use_cases.atualizar_status import AtualizarStatusUseCase
+from app.application.use_cases.aprovar_os import AprovarOSUseCase
+from app.application.use_cases.rejeitar_os import RejeitarOSUseCase
+from app.domain.entities.os import StatusOS
+
+router = APIRouter(prefix="/atendimento", tags=["📋 Ordens de Serviço"])
+
+
+@router.post("/os", response_model=OSResponse, status_code=201,
+    summary="Criar Ordem de Serviço",
+    description="Cria uma OS com status inicial **AGUARDANDO_APROVACAO**. O orçamento é calculado automaticamente.")
+def criar_os(data: OSCreate, db: Session = Depends(get_db), _=Depends(get_current_user)):
+    return CriarOSUseCase(
+        db=db,
+        catalogo_repo=CatalogoRepositoryAdapter(db),
+        estoque_repo=EstoqueRepositoryAdapter(db),
+    ).executar(data.cliente_id, data.veiculo_id, data.servicos, data.pecas)
+
+
+@router.get("/os", response_model=list[OSResponse], summary="Listar todas as OS")
+def listar_os(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+    status: StatusOS | None = Query(default=None),
+    db: Session = Depends(get_db),
+    _=Depends(get_current_user),
+):
+    return ListarOSUseCase(OSRepositoryAdapter(db)).executar(skip, limit, status)
+
+
+@router.get("/os/metricas/tempo-medio",
+    summary="Tempo médio de execução",
+    description="Retorna o tempo médio (em minutos) entre início e finalização. **Requer ADMIN.**")
+def tempo_medio(db: Session = Depends(get_db), _=Depends(require_admin)):
+    return OSRepositoryAdapter(db).tempo_medio_execucao()
+
+
+@router.get("/os/consulta", response_model=list[OSResponse],
+    summary="Consultar OS por CPF/CNPJ (público)",
+    description="Rota **pública** — o cliente informa seu CPF/CNPJ e recebe todas as suas OS.")
+def consultar_os_por_cpf(cpf_cnpj: str, db: Session = Depends(get_db)):
+    return OSRepositoryAdapter(db).buscar_por_cpf_cnpj(cpf_cnpj)
+
+
+@router.get("/os/{os_id}", response_model=OSResponse,
+    summary="Consultar OS por ID (público)",
+    description="Rota **pública** — consulta status e detalhes de uma OS pelo seu ID.")
+def obter_os(os_id: UUID, db: Session = Depends(get_db)):
+    return OSRepositoryAdapter(db).buscar_ou_falhar(os_id)
+
+
+@router.post("/os/{os_id}/aprovar", response_model=OSResponse,
+    summary="Aprovar orçamento (público)",
+    description="Rota **pública** — cliente aprova o orçamento informando seu CPF/CNPJ. Move a OS de `AGUARDANDO_APROVACAO` → `RECEBIDA`.")
+def aprovar_os(os_id: UUID, data: ClienteAprovacao, db: Session = Depends(get_db)):
+    return AprovarOSUseCase(
+        db=db,
+        os_repo=OSRepositoryAdapter(db),
+        cliente_repo=ClienteRepositoryAdapter(db),
+    ).executar(os_id, data.cpf_cnpj)
+
+
+@router.post("/os/{os_id}/rejeitar", response_model=OSResponse,
+    summary="Rejeitar orçamento (público)",
+    description="Rota **pública** — cliente rejeita o orçamento informando seu CPF/CNPJ. Move a OS de `AGUARDANDO_APROVACAO` → `NEGADA`.")
+def rejeitar_os(os_id: UUID, data: ClienteAprovacao, db: Session = Depends(get_db)):
+    return RejeitarOSUseCase(
+        db=db,
+        os_repo=OSRepositoryAdapter(db),
+        cliente_repo=ClienteRepositoryAdapter(db),
+    ).executar(os_id, data.cpf_cnpj)
+
+
+@router.patch("/os/{os_id}/status", response_model=OSResponse,
+    summary="Atualizar status da OS",
+    description="""
+Transições válidas:
+
+| De | Para |
+|---|---|
+| AGUARDANDO_APROVACAO | RECEBIDA, NEGADA, ABANDONADA |
+| RECEBIDA | EM_DIAGNOSTICO |
+| EM_DIAGNOSTICO | AGUARDANDO_APROVACAO, EM_EXECUCAO |
+| EM_EXECUCAO | FINALIZADA |
+| FINALIZADA | ENTREGUE |
+
+Ao mover para **EM_EXECUCAO**, as peças vinculadas são baixadas automaticamente do estoque.
+""")
+def atualizar_status(
+    os_id: UUID,
+    data: OSStatusUpdate,
+    db: Session = Depends(get_db),
+    _=Depends(get_current_user),
+):
+    return AtualizarStatusUseCase(
+        db=db,
+        os_repo=OSRepositoryAdapter(db),
+        estoque_repo=EstoqueRepositoryAdapter(db),
+    ).executar(os_id, data.status)

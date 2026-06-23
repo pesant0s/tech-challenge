@@ -255,3 +255,20 @@ def test_os_requer_auth(client):
         "servicos": [], "pecas": []
     })
     assert r.status_code == 401
+
+
+def test_get_os_por_id_publico(client, auth_headers):
+    c, v, s = _setup(client, auth_headers)
+    os = client.post("/atendimento/os", json={
+        "cliente_id": c["id"], "veiculo_id": v["id"],
+        "servicos": [{"servico_id": s["id"], "quantidade": 1}]
+    }, headers=auth_headers).json()
+    r = client.get(f"/atendimento/os/{os['id']}")
+    assert r.status_code == 200
+    assert r.json()["id"] == os["id"]
+    assert r.json()["status"] == "AGUARDANDO_APROVACAO"
+
+
+def test_get_os_nao_encontrada(client):
+    r = client.get("/atendimento/os/00000000-0000-0000-0000-000000000000")
+    assert r.status_code == 404

@@ -7,8 +7,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 from fastapi.testclient import TestClient
 from app.main import app
-from app.db.base import Base
-from app.db.session import get_db
+from app.infrastructure.database import Base, get_db
 
 engine = create_engine(
     "sqlite:///:memory:",
@@ -31,10 +30,9 @@ def db():
 
 @pytest.fixture(scope="function")
 def client(db):
-    # Seed admin diretamente na sessão de teste (antes do startup event)
-    from app.modules.auth.models import RoleEnum
-    from app.modules.auth.repository import create_usuario
-    from app.modules.auth.schemas import UsuarioCreate
+    from app.domain.entities.usuario import RoleEnum
+    from app.adapters.outbound.persistence.auth_repository import create_usuario
+    from app.adapters.inbound.http.auth_schemas import UsuarioCreate
     create_usuario(db, UsuarioCreate(username="admin", password="admin123", role=RoleEnum.ADMIN))
 
     def override_get_db():
@@ -60,9 +58,9 @@ def auth_headers(client):
 @pytest.fixture(scope="function")
 def atendente_headers(client, db):
     """Token de ATENDENTE."""
-    from app.modules.auth.models import RoleEnum
-    from app.modules.auth.repository import create_usuario
-    from app.modules.auth.schemas import UsuarioCreate
+    from app.domain.entities.usuario import RoleEnum
+    from app.adapters.outbound.persistence.auth_repository import create_usuario
+    from app.adapters.inbound.http.auth_schemas import UsuarioCreate
     create_usuario(db, UsuarioCreate(username="atendente", password="atend123", role=RoleEnum.ATENDENTE))
     resp = client.post("/auth/token", data={"username": "atendente", "password": "atend123"})
     token = resp.json()["access_token"]

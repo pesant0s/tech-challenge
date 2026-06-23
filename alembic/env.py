@@ -2,13 +2,13 @@ import os
 from logging.config import fileConfig
 from sqlalchemy import engine_from_config, pool
 from alembic import context
-from app.db.base import Base
-from app.core.config import settings
-import app.modules.auth.models
-import app.modules.cadastro.models
-import app.modules.catalogo.models
-import app.modules.estoque.models
-import app.modules.atendimento.models
+from app.infrastructure.database import Base
+from app.infrastructure.config import settings
+import app.domain.entities.usuario
+import app.domain.entities.cliente
+import app.domain.entities.catalogo
+import app.domain.entities.estoque
+import app.domain.entities.os
 
 config = context.config
 config.set_main_option("sqlalchemy.url", os.environ.get("DATABASE_URL", settings.DATABASE_URL))

@@ -1,25 +1,27 @@
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Depends, HTTPException, status, Request
+from fastapi import FastAPI, Depends, HTTPException, Request, status
+from fastapi.responses import JSONResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from sqlalchemy.orm import Session
-from app.core.config import settings
-from app.core.security import create_access_token, verify_password
-from app.db.session import get_db
-from app.modules.cadastro.routes import router as cadastro_router
-from app.modules.catalogo.routes import router as catalogo_router
-from app.modules.estoque.routes import router as estoque_router
-from app.modules.atendimento.routes import router as atendimento_router
-from app.modules.auth.routes import router as auth_router
+from app.infrastructure.config import settings
+from app.infrastructure.security import create_access_token, verify_password
+from app.infrastructure.database import get_db
+from app.adapters.inbound.http.cadastro_routes import router as cadastro_router
+from app.adapters.inbound.http.catalogo_routes import router as catalogo_router
+from app.adapters.inbound.http.estoque_routes import router as estoque_router
+from app.adapters.inbound.http.atendimento_routes import router as atendimento_router
+from app.adapters.inbound.http.auth_routes import router as auth_router
+from app.domain.exceptions import NotFoundException, ConflictException, BusinessRuleException
 
 
 def _seed_admin(app: FastAPI):
-    from app.modules.auth.repository import get_usuario_by_username, create_usuario
-    from app.modules.auth.schemas import UsuarioCreate
-    from app.modules.auth.models import RoleEnum
+    from app.adapters.outbound.persistence.auth_repository import get_usuario_by_username, create_usuario
+    from app.adapters.inbound.http.auth_schemas import UsuarioCreate
+    from app.domain.entities.usuario import RoleEnum
     is_overridden = get_db in app.dependency_overrides
     db_factory = app.dependency_overrides.get(get_db, get_db)
     db = next(db_factory())
@@ -84,6 +86,21 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
+@app.exception_handler(NotFoundException)
+async def not_found_handler(request: Request, exc: NotFoundException):
+    return JSONResponse(status_code=404, content={"detail": exc.detail})
+
+
+@app.exception_handler(ConflictException)
+async def conflict_handler(request: Request, exc: ConflictException):
+    return JSONResponse(status_code=409, content={"detail": exc.detail})
+
+
+@app.exception_handler(BusinessRuleException)
+async def business_rule_handler(request: Request, exc: BusinessRuleException):
+    return JSONResponse(status_code=422, content={"detail": exc.detail})
+
+
 @app.middleware("http")
 async def security_headers(request, call_next):
     response = await call_next(request)
@@ -115,7 +132,7 @@ def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db),
 ):
-    from app.modules.auth.repository import get_usuario_by_username
+    from app.adapters.outbound.persistence.auth_repository import get_usuario_by_username
     user = get_usuario_by_username(db, form_data.username)
     if not user or not user.ativo or not verify_password(form_data.password, user.hashed_password):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Credenciais inválidas")
