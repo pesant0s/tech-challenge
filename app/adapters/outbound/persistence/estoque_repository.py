@@ -21,7 +21,11 @@ class EstoqueRepositoryAdapter:
         return p
 
     def baixar_estoque(self, peca_id, quantidade: int, motivo: str = "Baixa por OS"):
-        p = self.buscar_peca_ou_falhar(peca_id)
+        # with_for_update() evita TOCTOU: garante que nenhuma outra transação
+        # leia ou altere esta linha entre o check e o commit.
+        p = self._db.query(Peca).filter(Peca.id == peca_id).with_for_update().first()
+        if not p:
+            raise NotFoundException("Peça não encontrada")
         if p.quantidade < quantidade:
             raise BusinessRuleException(f"Estoque insuficiente para peça '{p.nome}'")
         p.quantidade -= quantidade

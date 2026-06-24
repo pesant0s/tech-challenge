@@ -272,3 +272,53 @@ def test_get_os_por_id_publico(client, auth_headers):
 def test_get_os_nao_encontrada(client):
     r = client.get("/atendimento/os/00000000-0000-0000-0000-000000000000")
     assert r.status_code == 404
+
+
+def test_fila_os_ordenacao_prioridade(client, auth_headers):
+    c, v, s = _setup(client, auth_headers)
+
+    # OS1 → avança até EM_DIAGNOSTICO (prioridade 3)
+    os1 = client.post("/atendimento/os", json={
+        "cliente_id": c["id"], "veiculo_id": v["id"],
+        "servicos": [{"servico_id": s["id"], "quantidade": 1}]
+    }, headers=auth_headers).json()
+    client.patch(f"/atendimento/os/{os1['id']}/status",
+        json={"status": "RECEBIDA"}, headers=auth_headers)
+    client.patch(f"/atendimento/os/{os1['id']}/status",
+        json={"status": "EM_DIAGNOSTICO"}, headers=auth_headers)
+
+    # OS2 → fica em AGUARDANDO_APROVACAO (prioridade 2)
+    os2 = client.post("/atendimento/os", json={
+        "cliente_id": c["id"], "veiculo_id": v["id"],
+        "servicos": [{"servico_id": s["id"], "quantidade": 1}]
+    }, headers=auth_headers).json()
+
+    r = client.get("/atendimento/os/fila", headers=auth_headers)
+    assert r.status_code == 200
+    ids = [o["id"] for o in r.json()]
+    assert ids.index(os2["id"]) < ids.index(os1["id"])
+
+
+def test_fila_os_exclui_finalizadas(client, auth_headers):
+    c, v, s = _setup(client, auth_headers)
+
+    # OS1 → avança até FINALIZADA (deve ser excluída da fila)
+    os1 = client.post("/atendimento/os", json={
+        "cliente_id": c["id"], "veiculo_id": v["id"],
+        "servicos": [{"servico_id": s["id"], "quantidade": 1}]
+    }, headers=auth_headers).json()
+    for status in ["RECEBIDA", "EM_DIAGNOSTICO", "EM_EXECUCAO", "FINALIZADA"]:
+        client.patch(f"/atendimento/os/{os1['id']}/status",
+            json={"status": status}, headers=auth_headers)
+
+    # OS2 → fica ativa (deve aparecer na fila)
+    os2 = client.post("/atendimento/os", json={
+        "cliente_id": c["id"], "veiculo_id": v["id"],
+        "servicos": [{"servico_id": s["id"], "quantidade": 1}]
+    }, headers=auth_headers).json()
+
+    r = client.get("/atendimento/os/fila", headers=auth_headers)
+    assert r.status_code == 200
+    ids = [o["id"] for o in r.json()]
+    assert os1["id"] not in ids
+    assert os2["id"] in ids

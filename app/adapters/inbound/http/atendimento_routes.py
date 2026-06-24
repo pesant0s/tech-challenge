@@ -56,6 +56,24 @@ def consultar_os_por_cpf(cpf_cnpj: str, db: Session = Depends(get_db)):
     return OSRepositoryAdapter(db).buscar_por_cpf_cnpj(cpf_cnpj)
 
 
+@router.get("/os/fila", response_model=list[OSResponse],
+    summary="Fila de OS por prioridade operacional",
+    description="""
+Retorna as OS **ativas** ordenadas por prioridade:
+
+| Prioridade | Status |
+|---|---|
+| 1 | EM_EXECUCAO |
+| 2 | AGUARDANDO_APROVACAO |
+| 3 | EM_DIAGNOSTICO |
+| 4 | RECEBIDA |
+
+`FINALIZADA` e `ENTREGUE` são excluídas. Dentro de cada prioridade, a mais antiga aparece primeiro.
+""")
+def listar_fila(db: Session = Depends(get_db), _=Depends(get_current_user)):
+    return OSRepositoryAdapter(db).listar_fila_priorizada()
+
+
 @router.get("/os/{os_id}", response_model=OSResponse,
     summary="Consultar OS por ID (público)",
     description="Rota **pública** — consulta status e detalhes de uma OS pelo seu ID.")

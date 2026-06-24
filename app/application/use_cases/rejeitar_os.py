@@ -18,7 +18,7 @@ class RejeitarOSUseCase:
         except ValueError as exc:
             raise BusinessRuleException(str(exc))
 
-        os = self._os_repo.buscar_ou_falhar(os_id)
+        os = self._os_repo.buscar_para_escrita(os_id)
         cliente = self._cliente_repo.buscar_por_cpf_cnpj_digits(digits)
         if not cliente or os.cliente_id != cliente.id:
             raise BusinessRuleException("CPF/CNPJ não corresponde ao titular desta OS")

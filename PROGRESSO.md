@@ -10,7 +10,7 @@
 | Fase | Status | Nota |
 |------|--------|------|
 | Fase 01 — Monolito em camadas | ✅ Entregue e aprovada | Aprovada com feedback de melhorias |
-| Fase 02 — Hexagonal + Infra | 🔄 Em andamento (3/10 etapas) | Etapas 1, 2 e 3 concluídas |
+| Fase 02 — Hexagonal + Infra | 🔄 Em andamento (9/10 etapas) | Etapas 1–9 concluídas |
 
 ---
 
@@ -633,20 +633,20 @@ GitHub Actions CI/CD Pipeline
 - [x] Etapa 1 — Exceções desacopladas do HTTP
 - [x] Etapa 2 — `GET /atendimento/os/{os_id}` implementado
 - [x] Etapa 3 — Reestruturação Hexagonal
-- [ ] Etapa 4 — Listagem de OS por prioridade (`GET /atendimento/os/fila`)
-- [ ] Etapa 5 — Webhook de email (`POST /webhooks/email`)
+- [x] Etapa 4 — Listagem de OS por prioridade (`GET /atendimento/os/fila`)
+- [x] Etapa 5 — Webhook de email (`POST /webhooks/email`)
 
 **Testes:**
-- [x] 93 testes passando (base atual — cresce a cada etapa)
+- [x] 101 testes passando (base atual — cresce a cada etapa)
 - [x] Testes de `GET /os/{id}` — 2 testes (Etapa 2 ✅)
-- [ ] Testes de fila priorizada — 2 testes (Etapa 4)
-- [ ] Testes de webhook email — 6 cenários (Etapa 5)
+- [x] Testes de fila priorizada — 2 testes (Etapa 4 ✅)
+- [x] Testes de webhook email — 6 cenários (Etapa 5 ✅)
 
 **Infraestrutura:**
-- [ ] Etapa 6 — Manifestos Kubernetes (`/k8s`) — 8 arquivos
-- [ ] Etapa 7 — Terraform (`/infra`) — 8 arquivos
-- [ ] Etapa 8 — GitHub Actions (`.github/workflows/ci.yml`)
-- [ ] Etapa 9 — Docker revisado (`docker-compose.prod.yml`)
+- [x] Etapa 6 — Manifestos Kubernetes (`/k8s`) — 9 arquivos (namespace, configmap, secret, deployment, service, hpa, postgres/statefulset, pvc, service)
+- [x] Etapa 7 — Terraform (`/infra`) — 9 arquivos (main, variables, outputs, namespace, configmap, secret, deployment, service, hpa)
+- [x] Etapa 8 — GitHub Actions (`.github/workflows/ci.yml`) — jobs: test, build-and-push (main only), deploy-docs
+- [x] Etapa 9 — Docker revisado — `docker-compose.prod.yml` criado, porta restaurada para 8000:8000
 
 **Documentação (Excalidraw):**
 - [x] Diagrama de Arquitetura Hexagonal — adicionado ao `arquitetura.excalidraw` (Y=26500)
@@ -678,3 +678,11 @@ GitHub Actions CI/CD Pipeline
 | 2026-06-23 | Auditoria do Excalidraw: mapeados 1.593 elementos existentes; identificados 2 diagramas obrigatórios faltantes para Fase 02 (Hexagonal + Infra/Deploy); detalhes e conteúdo de cada diagrama documentados no PROGRESSO.md | `PROGRESSO.md` |
 | 2026-06-23 | Diagrama de Arquitetura Hexagonal: 1ª tentativa revertida (formato `label` do MCP incompatível com o arquivo; escala errada) — refazer com Python gerando JSON nativo | `arquitetura.excalidraw` |
 | 2026-06-23 | Diagrama de Arquitetura Hexagonal adicionado corretamente: 101 elementos (38 rects + 61 texts + 2 arrows), JSON nativo Excalidraw, escala matching arquivo existente (Y=26500, fontSize 30-50). 3 colunas (Inbound/App+Domain/Outbound), Ports amarelos, Entities/VOs/Exceptions no Domain, Regra de Dependência | `arquitetura.excalidraw` |
+| 2026-06-24 | Auditoria e correções Excalidraw: card BC: Autenticação adicionado ao Domain Model; nome "Catálogo" corrigido no Subdomain Map; 5 elementos lixo removidos | `arquitetura.excalidraw` |
+| 2026-06-24 | Etapa 4: `GET /atendimento/os/fila` implementado (rota autenticada, prioridade EM_EXECUCAO=1 > AGUARDANDO=2 > EM_DIAGNOSTICO=3 > RECEBIDA=4, exclui FINALIZADA e ENTREGUE) + 2 testes — 95/95 ✅ | `atendimento_routes.py`, `tests/test_atendimento.py` |
+| 2026-06-24 | Etapa 5: `POST /webhooks/email` implementado — token validado com `hmac.compare_digest` (timing-safe), `AcaoWebhook` enum rejeita ações inválidas, `ProcessarWebhookEmailUseCase` criado, `WEBHOOK_SECRET` em `.env` e `.env.example` — 6 testes, 101/101 ✅ | `webhook_routes.py`, `webhook_schemas.py`, `processar_webhook_email.py`, `main.py`, `.env`, `.env.example`, `tests/test_webhook.py` |
+| 2026-06-24 | Excalidraw: `webhook_routes.py` card atualizado (amarelo→azul, removido "pendente"); `ProcessarWebhookEmailUseCase` adicionado no slot vazio (x=23935,y=17090) — 1712 elementos total | `arquitetura.excalidraw` |
+| 2026-06-24 | Etapa 6: 9 manifestos Kubernetes criados em `/k8s` — namespace, configmap, secret, deployment (2 réplicas, readinessProbe /health), service (NodePort 30080), hpa (min2/max5/CPU70%), postgres/statefulset+pvc+service | `k8s/` |
+| 2026-06-24 | Etapa 7: 9 arquivos Terraform em `/infra` — provider kubernetes/minikube, variables (sensitive), secret usando vars, hpa v2, outputs com service_url | `infra/` |
+| 2026-06-24 | Etapa 8: `.github/workflows/ci.yml` — job test (SQLite, pytest --cov), build-and-push para GHCR (só main), deploy-docs com instruções kubectl | `.github/workflows/ci.yml` |
+| 2026-06-24 | Etapa 9: `docker-compose.prod.yml` criado (sem volumes/reload, --workers 2); porta restaurada para 8000:8000 no `docker-compose.yml` | `docker-compose.prod.yml`, `docker-compose.yml` |

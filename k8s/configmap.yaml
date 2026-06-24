@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tech-challenge-config
+  namespace: oficina
+data:
+  ALGORITHM: "HS256"
+  ACCESS_TOKEN_EXPIRE_MINUTES: "60"
+  ALLOWED_ORIGINS: '["http://localhost:3000"]'
+  ADMIN_USERNAME: "admin"

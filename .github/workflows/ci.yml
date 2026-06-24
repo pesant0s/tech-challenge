@@ -1,0 +1,95 @@
+name: CI
+
+on:
+  push:
+    branches: [develop, main]
+  pull_request:
+    branches: [main]
+
+env:
+  IMAGE: ghcr.io/${{ github.repository_owner }}/tech-challenge
+
+jobs:
+  test:
+    name: Testes e cobertura
+    runs-on: ubuntu-latest
+
+    env:
+      DATABASE_URL: "sqlite:///./test.db"
+      SECRET_KEY: "ci-secret-key-minimo-32-chars-para-testes"
+      ALGORITHM: "HS256"
+      ACCESS_TOKEN_EXPIRE_MINUTES: "60"
+      ADMIN_USERNAME: "admin"
+      ADMIN_PASSWORD: "admin123"
+      WEBHOOK_SECRET: "webhook-secret-ci"
+      ALLOWED_ORIGINS: '["http://localhost:3000"]'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Instalar dependências
+        run: pip install -r requirements.txt
+
+      - name: Executar testes com cobertura
+        run: |
+          python -m pytest --cov=app --cov-report=xml --cov-report=term-missing -q
+
+      - name: Upload cobertura
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.xml
+
+  build-and-push:
+    name: Build e push GHCR
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Login GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build e push imagem
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:${{ github.sha }}
+            ${{ env.IMAGE }}:latest
+
+  deploy-docs:
+    name: Instruções de deploy
+    needs: build-and-push
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Exibir instruções de deploy no minikube
+        run: |
+          echo "=========================================="
+          echo "Imagem publicada: ${{ env.IMAGE }}:${{ github.sha }}"
+          echo ""
+          echo "Para aplicar no minikube local:"
+          echo "  minikube image pull ${{ env.IMAGE }}:${{ github.sha }}"
+          echo "  kubectl set image deployment/tech-challenge-api api=${{ env.IMAGE }}:${{ github.sha }} -n oficina"
+          echo "  kubectl rollout status deployment/tech-challenge-api -n oficina"
+          echo "=========================================="

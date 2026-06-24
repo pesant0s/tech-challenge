@@ -11,7 +11,7 @@ class AtualizarStatusUseCase:
         self._estoque = estoque_repo
 
     def executar(self, os_id, novo_status: StatusOS) -> OrdemDeServico:
-        os = self._os_repo.buscar_ou_falhar(os_id)
+        os = self._os_repo.buscar_para_escrita(os_id)
         os.transicionar_para(novo_status)
         if novo_status == StatusOS.EM_EXECUCAO:
             for item in os.itens:

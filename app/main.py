@@ -15,6 +15,7 @@ from app.adapters.inbound.http.catalogo_routes import router as catalogo_router
 from app.adapters.inbound.http.estoque_routes import router as estoque_router
 from app.adapters.inbound.http.atendimento_routes import router as atendimento_router
 from app.adapters.inbound.http.auth_routes import router as auth_router
+from app.adapters.inbound.http.webhook_routes import router as webhook_router
 from app.domain.exceptions import NotFoundException, ConflictException, BusinessRuleException
 
 
@@ -123,6 +124,7 @@ app.include_router(cadastro_router)
 app.include_router(catalogo_router)
 app.include_router(estoque_router)
 app.include_router(atendimento_router)
+app.include_router(webhook_router)
 
 
 @app.post("/auth/token", tags=["Auth"], summary="Obter token JWT")

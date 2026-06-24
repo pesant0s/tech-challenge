@@ -21,6 +21,18 @@ class OSRepositoryAdapter:
             raise NotFoundException("Ordem de Serviço não encontrada")
         return os
 
+    def buscar_para_escrita(self, os_id) -> OrdemDeServico:
+        """Busca com SELECT FOR UPDATE — usar em use cases que alteram estado."""
+        os = (
+            self._db.query(OrdemDeServico)
+            .filter(OrdemDeServico.id == os_id)
+            .with_for_update()
+            .first()
+        )
+        if not os:
+            raise NotFoundException("Ordem de Serviço não encontrada")
+        return os
+
     def listar(self, skip: int = 0, limit: int = 100, status: StatusOS | None = None) -> list[OrdemDeServico]:
         q = self._db.query(OrdemDeServico)
         if status:
