@@ -10,7 +10,7 @@
 | Fase | Status | Nota |
 |------|--------|------|
 | Fase 01 — Monolito em camadas | ✅ Entregue e aprovada | Aprovada com feedback de melhorias |
-| Fase 02 — Hexagonal + Infra | 🔄 Em andamento (9/10 etapas) | Etapas 1–9 concluídas |
+| Fase 02 — Hexagonal + Infra | ✅ Concluída (10/10 etapas) | Pronta para entrega |
 
 ---
 
@@ -653,7 +653,7 @@ GitHub Actions CI/CD Pipeline
 - [ ] Diagrama de Infraestrutura / Deploy — fazer após Etapas 6-8
 
 **Entregáveis finais:**
-- [ ] Etapa 10 — README.md completo (incluindo referência ao Excalidraw atualizado)
+- [x] Etapa 10 — README.md completo: arquitetura hexagonal ASCII, Docker/K8s/Terraform/CI step-by-step, tabela de variáveis, todas as rotas, webhook docs, segurança
 - [ ] Vídeo ≤ 15 min no YouTube/Vimeo
 - [ ] PDF entregue no portal
 
@@ -686,3 +686,4 @@ GitHub Actions CI/CD Pipeline
 | 2026-06-24 | Etapa 7: 9 arquivos Terraform em `/infra` — provider kubernetes/minikube, variables (sensitive), secret usando vars, hpa v2, outputs com service_url | `infra/` |
 | 2026-06-24 | Etapa 8: `.github/workflows/ci.yml` — job test (SQLite, pytest --cov), build-and-push para GHCR (só main), deploy-docs com instruções kubectl | `.github/workflows/ci.yml` |
 | 2026-06-24 | Etapa 9: `docker-compose.prod.yml` criado (sem volumes/reload, --workers 2); porta restaurada para 8000:8000 no `docker-compose.yml` | `docker-compose.prod.yml`, `docker-compose.yml` |
+| 2026-06-24 | Etapa 10: README.md reescrito para Fase 02 — diagrama hexagonal ASCII, Como rodar (Docker/K8s/Terraform), CI badge, tabela ENV completa, webhook docs, fila de prioridade, todas as rotas | `README.md` |
