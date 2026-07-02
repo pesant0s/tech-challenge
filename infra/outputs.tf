@@ -1,6 +1,6 @@
-output "service_url" {
-  description = "URL de acesso à API via NodePort (usar com: minikube service tech-challenge-svc -n oficina --url)"
-  value       = "http://$(minikube ip):30080"
+output "node_port" {
+  description = "NodePort exposto pela API — obter a URL completa com: minikube service tech-challenge-svc -n oficina --url"
+  value       = kubernetes_service.api.spec[0].port[0].node_port
 }
 
 output "namespace" {
@@ -8,7 +8,7 @@ output "namespace" {
   value       = kubernetes_namespace.oficina.metadata[0].name
 }
 
-output "swagger_url" {
-  description = "URL do Swagger UI (após obter IP do minikube)"
-  value       = "http://$(minikube ip):30080/docs"
+output "get_url_command" {
+  description = "Comando para obter a URL de acesso via minikube"
+  value       = "minikube service tech-challenge-svc -n oficina --url"
 }

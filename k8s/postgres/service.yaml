@@ -5,6 +5,7 @@ metadata:
   namespace: oficina
 spec:
   type: ClusterIP
+  clusterIP: None
   selector:
     app: postgres
   ports:
