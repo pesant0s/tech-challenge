@@ -644,18 +644,26 @@ GitHub Actions CI/CD Pipeline
 
 **Infraestrutura:**
 - [x] Etapa 6 — Manifestos Kubernetes (`/k8s`) — 9 arquivos (namespace, configmap, secret, deployment, service, hpa, postgres/statefulset, pvc, service)
-- [x] Etapa 7 — Terraform (`/infra`) — 9 arquivos (main, variables, outputs, namespace, configmap, secret, deployment, service, hpa)
-- [x] Etapa 8 — GitHub Actions (`.github/workflows/ci.yml`) — jobs: test, build-and-push (main only), deploy-docs
+- [x] Etapa 7 — Terraform (`/infra`) — 10 arquivos (main, variables, outputs, namespace, configmap, secret, deployment, service, hpa, **postgres.tf**)
+- [x] Etapa 8 — GitHub Actions (`.github/workflows/ci.yml`) — jobs: test + dry-run K8s, deploy-k8s (Kind cluster real), build-and-push GHCR
 - [x] Etapa 9 — Docker revisado — `docker-compose.prod.yml` criado, porta restaurada para 8000:8000
 
 **Documentação (Excalidraw):**
 - [x] Diagrama de Arquitetura Hexagonal — adicionado ao `arquitetura.excalidraw` (Y=26500)
-- [ ] Diagrama de Infraestrutura / Deploy — fazer após Etapas 6-8
+- [x] Diagrama de Infraestrutura / Deploy — adicionado no README.md como ASCII art
 
 **Entregáveis finais:**
-- [x] Etapa 10 — README.md completo: arquitetura hexagonal ASCII, Docker/K8s/Terraform/CI step-by-step, tabela de variáveis, todas as rotas, webhook docs, segurança
+- [x] Etapa 10 — README.md completo: hexagonal ASCII + diagrama infra/deploy, Docker/K8s/Terraform/CI, tabela ENV, todas as rotas, Swagger link, webhook docs, segurança
 - [ ] Vídeo ≤ 15 min no YouTube/Vimeo
-- [ ] PDF entregue no portal
+- [ ] PDF com link repositório + arquitetura + vídeo (entregue no portal do aluno com acesso para soat-architecture)
+
+**Correções arquiteturais (pós-auditoria 2026-07-02):**
+- [x] `AcaoWebhook` movido para `app/domain/value_objects/webhook.py` (use case não depende mais de inbound adapter)
+- [x] Use cases sem import de `sqlalchemy.orm.Session` — SQLAlchemy removido da camada de aplicação
+- [x] `CriarOSUseCase`, `AtualizarStatusUseCase`, `AprovarOSUseCase`, `RejeitarOSUseCase`, `ProcessarWebhookEmailUseCase` — delegam commit/rollback/refresh ao repositório, não ao db direto
+- [x] CI/CD: fix `WEBHOOK_SECRET` mismatch (era `webhook-secret-ci`, devia ser `webhook-secret-local`)
+- [x] `infra/outputs.tf`: removido `$(minikube ip)` (sintaxe bash inválida em Terraform)
+- [x] `k8s/postgres/service.yaml`: `clusterIP: None` adicionado (headless service para StatefulSet)
 
 ---
 
@@ -687,3 +695,19 @@ GitHub Actions CI/CD Pipeline
 | 2026-06-24 | Etapa 8: `.github/workflows/ci.yml` — job test (SQLite, pytest --cov), build-and-push para GHCR (só main), deploy-docs com instruções kubectl | `.github/workflows/ci.yml` |
 | 2026-06-24 | Etapa 9: `docker-compose.prod.yml` criado (sem volumes/reload, --workers 2); porta restaurada para 8000:8000 no `docker-compose.yml` | `docker-compose.prod.yml`, `docker-compose.yml` |
 | 2026-06-24 | Etapa 10: README.md reescrito para Fase 02 — diagrama hexagonal ASCII, Como rodar (Docker/K8s/Terraform), CI badge, tabela ENV completa, webhook docs, fila de prioridade, todas as rotas | `README.md` |
+| 2026-07-02 | Auditoria profunda pós-entrega — 8 gaps identificados e corrigidos | vide abaixo |
+| 2026-07-02 | Fix arquitetura: `AcaoWebhook` movido de `adapters/inbound/http/webhook_schemas.py` → `domain/value_objects/webhook.py` (use case não pode depender de inbound adapter) | `domain/value_objects/webhook.py`, `webhook_schemas.py`, `processar_webhook_email.py` |
+| 2026-07-02 | Fix arquitetura: 5 use cases sem import de SQLAlchemy Session — `criar_os`, `atualizar_status`, `aprovar_os`, `rejeitar_os`, `processar_webhook_email` delegam commit/rollback ao repositório | `application/use_cases/*.py`, `adapters/inbound/http/atendimento_routes.py`, `webhook_routes.py` |
+| 2026-07-02 | Fix CI: WEBHOOK_SECRET corrigido de `webhook-secret-ci` → `webhook-secret-local` (causava 4 failures no pipeline) | `.github/workflows/ci.yml` |
+| 2026-07-02 | Fix CI: adicionado job `deploy-k8s` com Kind cluster real — build Docker, load Kind, apply postgres + app, rollout wait, smoke test /health; `build-and-push` agora após deploy K8s validado | `.github/workflows/ci.yml` |
+| 2026-07-02 | Fix Terraform: adicionado `infra/postgres.tf` com `kubernetes_stateful_set` + `kubernetes_service` (headless) — Terraform agora provisiona banco de dados além da API | `infra/postgres.tf` |
+| 2026-07-02 | Fix K8s: `k8s/postgres/service.yaml` com `clusterIP: None` (headless service correto para StatefulSet) | `k8s/postgres/service.yaml` |
+| 2026-07-02 | Fix infra/outputs.tf: removido `$(minikube ip)` (bash inválido em Terraform), substituído por `node_port` numérico + `get_url_command` | `infra/outputs.tf` |
+| 2026-07-02 | Fix README: adicionado diagrama ASCII de infraestrutura/deploy (GitHub Actions → Kind → GHCR → minikube cluster com HPA, PostgreSQL, Services); adicionado link Swagger como seção dedicada | `README.md` |
+| 2026-07-02 | **Hard deep search + testes reais** (venv Python, 101/101 ✅, 93% cobertura): rate limiting validado empiricamente (10→401, depois 429); domínio ok em `utcnow`; camada de aplicação confirmada limpa | — |
+| 2026-07-02 | **BUG CRÍTICO corrigido**: `.dockerignore` excluía `alembic.ini` → `alembic upgrade head` do CMD falhava no boot (`No 'script_location'`) → container quebrava em K8s e docker-compose.prod. Provado empiricamente e corrigido | `.dockerignore` |
+| 2026-07-02 | Fix: `email-validator` adicionado ao `requirements.txt` (código usa `EmailStr`; só funcionava por vir transitivo do fastapi 0.111) | `requirements.txt` |
+| 2026-07-02 | Fix: `OSRepositoryPort` passa a declarar `buscar_para_escrita` (usado pelos use cases, faltava no contrato) | `domain/ports/os_repository.py` |
+| 2026-07-02 | **Item C** — porta de saída de notificação viva: `EmailSimuladoAdapter` (implementa `EmailNotificacaoPort`) + `CriarOSUseCase` dispara e-mail simulado de aprovação ao criar OS; +1 teste (102 ✅) | `adapters/outbound/notifications/email_simulado.py`, `criar_os.py`, `atendimento_routes.py`, `cliente_repository.py`, `tests/test_notificacao.py` |
+| 2026-07-02 | **Item B** — hexagonal aplicado a todos os contextos: use cases `GerenciarCatalogo`, `GerenciarEstoque`, `GerenciarClientes`, `GerenciarVeiculos`; adapters de repositório completos; rotas de catálogo/estoque/cadastro agora finas (sem lógica) — funções legadas removidas | `application/use_cases/gerenciar_*.py`, `catalogo_repository.py`, `estoque_repository.py`, `cliente_repository.py`, `catalogo_routes.py`, `estoque_routes.py`, `cadastro_routes.py` |
+| 2026-07-02 | **Item A** — domínio 100% puro: entidades sem SQLAlchemy; mapeamento via **imperative mapping** em `orm_mapping.py`; `database.py` usa `registry`/`metadata`; `env.py` e `conftest.py` ajustados. Provado: `import` de entidade não carrega sqlalchemy/infra; E2E completo + Alembic + 102 testes ✅ | `domain/entities/*.py`, `infrastructure/orm_mapping.py`, `infrastructure/database.py`, `alembic/env.py`, `tests/conftest.py` |
