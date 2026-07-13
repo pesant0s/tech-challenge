@@ -2,14 +2,16 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 from app.domain.entities.estoque import Peca, MovimentacaoEstoque
 from app.domain.entities.os import ItemOS
-from app.domain.exceptions import NotFoundException, BusinessRuleException, ConflictException
+from app.domain.exceptions import NotFoundException, BusinessRuleException
 
 
 class EstoqueRepositoryAdapter:
-    """Implementação SQLAlchemy para operações de estoque."""
+    """Implementação SQLAlchemy para operações de estoque de peças."""
 
     def __init__(self, db: Session):
         self._db = db
+
+    # ---- Consultas usadas pelos use cases de OS ----
 
     def buscar_peca(self, peca_id) -> Peca | None:
         return self._db.query(Peca).filter(Peca.id == peca_id).first()
@@ -34,60 +36,31 @@ class EstoqueRepositoryAdapter:
         self._db.flush()
         return p, p.quantidade < p.estoque_minimo
 
+    # ---- CRUD do catálogo de peças ----
 
-# Funções legadas mantidas para uso direto nas rotas de estoque
+    def listar(self, skip: int = 0, limit: int = 100) -> list[Peca]:
+        return self._db.query(Peca).offset(skip).limit(limit).all()
 
-def _check_nome_unico(db: Session, nome: str, exclude_id=None):
-    q = db.query(Peca).filter(func.lower(Peca.nome) == nome.strip().lower())
-    if exclude_id:
-        q = q.filter(Peca.id != exclude_id)
-    if q.first():
-        raise ConflictException("Já existe uma peça com esse nome")
+    def existe_nome(self, nome: str, exclude_id=None) -> bool:
+        q = self._db.query(Peca).filter(func.lower(Peca.nome) == nome.strip().lower())
+        if exclude_id:
+            q = q.filter(Peca.id != exclude_id)
+        return q.first() is not None
 
+    def possui_vinculo_os(self, peca_id) -> bool:
+        return self._db.query(ItemOS).filter(ItemOS.peca_id == peca_id).first() is not None
 
-def create_peca(db: Session, data):
-    _check_nome_unico(db, data.nome)
-    p = Peca(**data.model_dump())
-    db.add(p)
-    db.commit()
-    db.refresh(p)
-    return p
+    def registrar_movimentacao(self, peca_id, tipo: str, quantidade: int, motivo: str | None) -> None:
+        self._db.add(MovimentacaoEstoque(peca_id=peca_id, tipo=tipo, quantidade=quantidade, motivo=motivo))
 
+    def adicionar(self, peca) -> None:
+        self._db.add(peca)
 
-def get_pecas(db: Session, skip: int = 0, limit: int = 100):
-    return db.query(Peca).offset(skip).limit(limit).all()
+    def remover(self, peca) -> None:
+        self._db.delete(peca)
 
+    def commit(self) -> None:
+        self._db.commit()
 
-def get_peca(db: Session, peca_id):
-    p = db.query(Peca).filter(Peca.id == peca_id).first()
-    if not p:
-        raise NotFoundException("Peça não encontrada")
-    return p
-
-
-def update_peca(db: Session, peca_id, data):
-    p = get_peca(db, peca_id)
-    _check_nome_unico(db, data.nome, exclude_id=peca_id)
-    for k, v in data.model_dump().items():
-        setattr(p, k, v)
-    db.commit()
-    db.refresh(p)
-    return p
-
-
-def delete_peca(db: Session, peca_id):
-    p = get_peca(db, peca_id)
-    if db.query(ItemOS).filter(ItemOS.peca_id == peca_id).first():
-        raise BusinessRuleException("Peça vinculada a OS ativa — não pode ser removida")
-    db.delete(p)
-    db.commit()
-
-
-def registrar_entrada(db: Session, peca_id, data):
-    p = get_peca(db, peca_id)
-    p.quantidade += data.quantidade
-    mov = MovimentacaoEstoque(peca_id=peca_id, tipo="ENTRADA", quantidade=data.quantidade, motivo=data.motivo)
-    db.add(mov)
-    db.commit()
-    db.refresh(p)
-    return p
+    def refresh(self, peca) -> None:
+        self._db.refresh(peca)

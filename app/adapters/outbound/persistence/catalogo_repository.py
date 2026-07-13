@@ -2,11 +2,10 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 from app.domain.entities.catalogo import Servico
 from app.domain.entities.os import ItemOS
-from app.domain.exceptions import NotFoundException, BusinessRuleException, ConflictException
 
 
 class CatalogoRepositoryAdapter:
-    """Implementação SQLAlchemy para consultas de serviços (usada pelos use cases de OS)."""
+    """Implementação SQLAlchemy do repositório de serviços do catálogo."""
 
     def __init__(self, db: Session):
         self._db = db
@@ -14,50 +13,26 @@ class CatalogoRepositoryAdapter:
     def buscar_servico(self, servico_id) -> Servico | None:
         return self._db.query(Servico).filter(Servico.id == servico_id).first()
 
+    def listar(self, skip: int = 0, limit: int = 100) -> list[Servico]:
+        return self._db.query(Servico).offset(skip).limit(limit).all()
 
-# Funções legadas para uso direto nas rotas de catálogo
+    def existe_nome(self, nome: str, exclude_id=None) -> bool:
+        q = self._db.query(Servico).filter(func.lower(Servico.nome) == nome.strip().lower())
+        if exclude_id:
+            q = q.filter(Servico.id != exclude_id)
+        return q.first() is not None
 
-def _check_nome_unico(db: Session, nome: str, exclude_id=None):
-    q = db.query(Servico).filter(func.lower(Servico.nome) == nome.strip().lower())
-    if exclude_id:
-        q = q.filter(Servico.id != exclude_id)
-    if q.first():
-        raise ConflictException("Já existe um serviço com esse nome")
+    def possui_vinculo_os(self, servico_id) -> bool:
+        return self._db.query(ItemOS).filter(ItemOS.servico_id == servico_id).first() is not None
 
+    def adicionar(self, servico) -> None:
+        self._db.add(servico)
 
-def create_servico(db: Session, data):
-    _check_nome_unico(db, data.nome)
-    s = Servico(**data.model_dump())
-    db.add(s)
-    db.commit()
-    db.refresh(s)
-    return s
+    def remover(self, servico) -> None:
+        self._db.delete(servico)
 
+    def commit(self) -> None:
+        self._db.commit()
 
-def get_servicos(db: Session, skip: int = 0, limit: int = 100):
-    return db.query(Servico).offset(skip).limit(limit).all()
-
-
-def get_servico(db: Session, servico_id):
-    s = db.query(Servico).filter(Servico.id == servico_id).first()
-    if not s:
-        raise NotFoundException("Serviço não encontrado")
-    return s
-
-
-def update_servico(db: Session, servico_id, data):
-    s = get_servico(db, servico_id)
-    _check_nome_unico(db, data.nome, exclude_id=servico_id)
-    for k, v in data.model_dump().items():
-        setattr(s, k, v)
-    db.commit()
-    db.refresh(s)
-    return s
-
-
-def delete_servico(db: Session, servico_id):
-    s = get_servico(db, servico_id)
-    if db.query(ItemOS).filter(ItemOS.servico_id == servico_id).first():
-        raise BusinessRuleException("Serviço vinculado a OS ativa — não pode ser removido")
-    db.delete(s)
-    db.commit()
+    def refresh(self, servico) -> None:
+        self._db.refresh(servico)
