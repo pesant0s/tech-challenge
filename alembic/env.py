@@ -2,13 +2,10 @@ import os
 from logging.config import fileConfig
 from sqlalchemy import engine_from_config, pool
 from alembic import context
-from app.infrastructure.database import Base
+# Importar `metadata` já dispara o registro dos mapeamentos imperativos
+# (app.infrastructure.database importa orm_mapping ao ser carregado).
+from app.infrastructure.database import metadata
 from app.infrastructure.config import settings
-import app.domain.entities.usuario
-import app.domain.entities.cliente
-import app.domain.entities.catalogo
-import app.domain.entities.estoque
-import app.domain.entities.os
 
 config = context.config
 config.set_main_option("sqlalchemy.url", os.environ.get("DATABASE_URL", settings.DATABASE_URL))
@@ -16,7 +13,7 @@ config.set_main_option("sqlalchemy.url", os.environ.get("DATABASE_URL", settings
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-target_metadata = Base.metadata
+target_metadata = metadata
 
 def run_migrations_offline():
     url = config.get_main_option("sqlalchemy.url")

@@ -1,11 +1,6 @@
 from uuid import UUID
-from enum import Enum
 from pydantic import BaseModel, Field
-
-
-class AcaoWebhook(str, Enum):
-    APROVAR = "APROVAR"
-    REJEITAR = "REJEITAR"
+from app.domain.value_objects.webhook import AcaoWebhook
 
 
 class WebhookEmailPayload(BaseModel):

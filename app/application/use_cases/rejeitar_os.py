@@ -1,4 +1,3 @@
-from sqlalchemy.orm import Session
 from app.domain.entities.os import OrdemDeServico
 from app.domain.exceptions import BusinessRuleException
 from app.domain.value_objects.documentos import CpfCnpj
@@ -7,8 +6,7 @@ from app.domain.value_objects.documentos import CpfCnpj
 class RejeitarOSUseCase:
     """Cliente rejeita o orçamento informando seu CPF/CNPJ."""
 
-    def __init__(self, db: Session, os_repo, cliente_repo):
-        self._db = db
+    def __init__(self, os_repo, cliente_repo):
         self._os_repo = os_repo
         self._cliente_repo = cliente_repo
 
@@ -24,6 +22,6 @@ class RejeitarOSUseCase:
             raise BusinessRuleException("CPF/CNPJ não corresponde ao titular desta OS")
 
         os.rejeitar()
-        self._db.commit()
-        self._db.refresh(os)
+        self._os_repo.commit()
+        self._os_repo.refresh(os)
         return os

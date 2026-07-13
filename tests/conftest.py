@@ -7,7 +7,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 from fastapi.testclient import TestClient
 from app.main import app
-from app.infrastructure.database import Base, get_db
+from app.infrastructure.database import metadata, get_db
 
 engine = create_engine(
     "sqlite:///:memory:",
@@ -19,13 +19,13 @@ TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engin
 
 @pytest.fixture(scope="function")
 def db():
-    Base.metadata.create_all(bind=engine)
+    metadata.create_all(bind=engine)
     session = TestingSessionLocal()
     try:
         yield session
     finally:
         session.close()
-        Base.metadata.drop_all(bind=engine)
+        metadata.drop_all(bind=engine)
 
 
 @pytest.fixture(scope="function")

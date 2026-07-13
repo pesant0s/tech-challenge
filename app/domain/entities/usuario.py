@@ -1,8 +1,4 @@
 import enum
-import uuid
-from sqlalchemy import Boolean, Column, Enum, String
-from sqlalchemy.dialects.postgresql import UUID
-from app.infrastructure.database import Base
 
 
 class RoleEnum(str, enum.Enum):
@@ -10,11 +6,13 @@ class RoleEnum(str, enum.Enum):
     ATENDENTE = "ATENDENTE"
 
 
-class Usuario(Base):
-    __tablename__ = "usuarios"
+class Usuario:
+    """Usuário do sistema (entidade de domínio pura, sem dependência de ORM)."""
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    username = Column(String(50), unique=True, nullable=False, index=True)
-    hashed_password = Column(String(255), nullable=False)
-    role = Column(Enum(RoleEnum), nullable=False, default=RoleEnum.ATENDENTE)
-    ativo = Column(Boolean, nullable=False, default=True)
+    def __init__(self, username=None, hashed_password=None, role=RoleEnum.ATENDENTE,
+                 ativo=True, id=None):
+        self.id = id
+        self.username = username
+        self.hashed_password = hashed_password
+        self.role = role
+        self.ativo = ativo
