@@ -10,6 +10,7 @@ from app.adapters.outbound.persistence.os_repository import OSRepositoryAdapter
 from app.adapters.outbound.persistence.catalogo_repository import CatalogoRepositoryAdapter
 from app.adapters.outbound.persistence.estoque_repository import EstoqueRepositoryAdapter
 from app.adapters.outbound.persistence.cliente_repository import ClienteRepositoryAdapter
+from app.adapters.outbound.notifications.email_simulado import EmailSimuladoAdapter
 from app.application.use_cases.criar_os import CriarOSUseCase
 from app.application.use_cases.listar_os import ListarOSUseCase
 from app.application.use_cases.atualizar_status import AtualizarStatusUseCase
@@ -25,9 +26,11 @@ router = APIRouter(prefix="/atendimento", tags=["📋 Ordens de Serviço"])
     description="Cria uma OS com status inicial **AGUARDANDO_APROVACAO**. O orçamento é calculado automaticamente.")
 def criar_os(data: OSCreate, db: Session = Depends(get_db), _=Depends(get_current_user)):
     return CriarOSUseCase(
-        db=db,
+        os_repo=OSRepositoryAdapter(db),
         catalogo_repo=CatalogoRepositoryAdapter(db),
         estoque_repo=EstoqueRepositoryAdapter(db),
+        cliente_repo=ClienteRepositoryAdapter(db),
+        notificador=EmailSimuladoAdapter(),
     ).executar(data.cliente_id, data.veiculo_id, data.servicos, data.pecas)
 
 
@@ -86,7 +89,6 @@ def obter_os(os_id: UUID, db: Session = Depends(get_db)):
     description="Rota **pública** — cliente aprova o orçamento informando seu CPF/CNPJ. Move a OS de `AGUARDANDO_APROVACAO` → `RECEBIDA`.")
 def aprovar_os(os_id: UUID, data: ClienteAprovacao, db: Session = Depends(get_db)):
     return AprovarOSUseCase(
-        db=db,
         os_repo=OSRepositoryAdapter(db),
         cliente_repo=ClienteRepositoryAdapter(db),
     ).executar(os_id, data.cpf_cnpj)
@@ -97,7 +99,6 @@ def aprovar_os(os_id: UUID, data: ClienteAprovacao, db: Session = Depends(get_db
     description="Rota **pública** — cliente rejeita o orçamento informando seu CPF/CNPJ. Move a OS de `AGUARDANDO_APROVACAO` → `NEGADA`.")
 def rejeitar_os(os_id: UUID, data: ClienteAprovacao, db: Session = Depends(get_db)):
     return RejeitarOSUseCase(
-        db=db,
         os_repo=OSRepositoryAdapter(db),
         cliente_repo=ClienteRepositoryAdapter(db),
     ).executar(os_id, data.cpf_cnpj)
@@ -125,7 +126,6 @@ def atualizar_status(
     _=Depends(get_current_user),
 ):
     return AtualizarStatusUseCase(
-        db=db,
         os_repo=OSRepositoryAdapter(db),
         estoque_repo=EstoqueRepositoryAdapter(db),
     ).executar(os_id, data.status)
