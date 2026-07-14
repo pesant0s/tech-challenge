@@ -1,12 +1,10 @@
-from sqlalchemy.orm import Session
 from app.domain.entities.os import OrdemDeServico, StatusOS
 
 
 class AtualizarStatusUseCase:
     """Valida e executa transição de status, coordenando efeitos colaterais (ex: baixa de estoque)."""
 
-    def __init__(self, db: Session, os_repo, estoque_repo):
-        self._db = db
+    def __init__(self, os_repo, estoque_repo):
         self._os_repo = os_repo
         self._estoque = estoque_repo
 
@@ -18,9 +16,9 @@ class AtualizarStatusUseCase:
                 if item.peca_id:
                     self._estoque.baixar_estoque(item.peca_id, item.quantidade, f"Baixa OS {os_id}")
         try:
-            self._db.commit()
+            self._os_repo.commit()
         except Exception:
-            self._db.rollback()
+            self._os_repo.rollback()
             raise
-        self._db.refresh(os)
+        self._os_repo.refresh(os)
         return os

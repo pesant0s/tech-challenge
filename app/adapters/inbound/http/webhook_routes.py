@@ -29,7 +29,6 @@ def webhook_email(payload: WebhookEmailPayload, db: Session = Depends(get_db)):
             detail="Token de webhook inválido",
         )
     return ProcessarWebhookEmailUseCase(
-        db=db,
         os_repo=OSRepositoryAdapter(db),
         cliente_repo=ClienteRepositoryAdapter(db),
     ).executar(payload.os_id, payload.acao, payload.cpf_cnpj)

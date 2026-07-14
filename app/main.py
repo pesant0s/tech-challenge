@@ -1,3 +1,5 @@
+import logging
+import sys
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse
@@ -17,6 +19,25 @@ from app.adapters.inbound.http.atendimento_routes import router as atendimento_r
 from app.adapters.inbound.http.auth_routes import router as auth_router
 from app.adapters.inbound.http.webhook_routes import router as webhook_router
 from app.domain.exceptions import NotFoundException, ConflictException, BusinessRuleException
+
+
+def _configurar_logging() -> None:
+    """Garante que as notificações (e-mail simulado) apareçam no stdout do container.
+
+    Sem isso, o uvicorn descarta logs INFO da aplicação (só configura os próprios
+    loggers), e a notificação de aprovação — visível via `kubectl logs` — ficaria
+    invisível. Escopo mantido no logger de notificações para não poluir a saída.
+    `propagate` fica ativo para que o `caplog` dos testes continue capturando.
+    """
+    notif = logging.getLogger("oficina.notificacoes")
+    notif.setLevel(logging.INFO)
+    if not any(isinstance(h, logging.StreamHandler) for h in notif.handlers):
+        handler = logging.StreamHandler(sys.stdout)
+        handler.setFormatter(logging.Formatter("%(asctime)s | %(levelname)s | %(name)s | %(message)s"))
+        notif.addHandler(handler)
+
+
+_configurar_logging()
 
 
 def _seed_admin(app: FastAPI):

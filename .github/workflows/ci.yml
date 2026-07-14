@@ -47,9 +47,72 @@ jobs:
           name: coverage-report
           path: coverage.xml
 
+      - name: Validar manifestos Kubernetes (dry-run)
+        uses: azure/setup-kubectl@v4
+
+      - name: Instalar Kind e validar manifestos
+        run: |
+          curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.23.0/kind-linux-amd64
+          chmod +x ./kind && sudo mv ./kind /usr/local/bin/kind
+          kind create cluster --name validate
+          kubectl apply --dry-run=client -f k8s/namespace.yaml
+          kubectl apply --dry-run=client -f k8s/postgres/
+          kubectl apply --dry-run=client -f k8s/
+
+  deploy-k8s:
+    name: Deploy em cluster Kind (K8s)
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Criar cluster Kind
+        uses: helm/kind-action@v1.10.0
+        with:
+          cluster_name: tech-challenge
+          wait: 120s
+
+      - name: Build imagem Docker
+        run: docker build -t tech-challenge-api:latest .
+
+      - name: Carregar imagem no Kind
+        run: kind load docker-image tech-challenge-api:latest --name tech-challenge
+
+      - name: Deploy PostgreSQL
+        run: |
+          kubectl apply -f k8s/namespace.yaml
+          kubectl apply -f k8s/postgres/pvc.yaml
+          kubectl apply -f k8s/postgres/service.yaml
+          kubectl apply -f k8s/postgres/statefulset.yaml
+          kubectl rollout status statefulset/postgres -n oficina --timeout=120s
+
+      - name: Deploy aplicação
+        run: |
+          kubectl apply -f k8s/configmap.yaml
+          kubectl apply -f k8s/secret.yaml
+          kubectl apply -f k8s/deployment.yaml
+          kubectl apply -f k8s/service.yaml
+          kubectl apply -f k8s/hpa.yaml
+          kubectl rollout status deployment/tech-challenge-api -n oficina --timeout=120s
+
+      - name: Smoke test — GET /health
+        run: |
+          kubectl port-forward svc/tech-challenge-svc 8080:8000 -n oficina &
+          sleep 15
+          curl -f http://localhost:8080/health
+
+      - name: Exibir estado do cluster
+        if: always()
+        run: |
+          kubectl get all -n oficina
+          kubectl get hpa -n oficina
+
   build-and-push:
     name: Build e push GHCR
-    needs: test
+    needs: deploy-k8s
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
 
@@ -76,20 +139,3 @@ jobs:
           tags: |
             ${{ env.IMAGE }}:${{ github.sha }}
             ${{ env.IMAGE }}:latest
-
-  deploy-docs:
-    name: Instruções de deploy
-    needs: build-and-push
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Exibir instruções de deploy no minikube
-        run: |
-          echo "=========================================="
-          echo "Imagem publicada: ${{ env.IMAGE }}:${{ github.sha }}"
-          echo ""
-          echo "Para aplicar no minikube local:"
-          echo "  minikube image pull ${{ env.IMAGE }}:${{ github.sha }}"
-          echo "  kubectl set image deployment/tech-challenge-api api=${{ env.IMAGE }}:${{ github.sha }} -n oficina"
-          echo "  kubectl rollout status deployment/tech-challenge-api -n oficina"
-          echo "=========================================="

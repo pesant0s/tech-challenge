@@ -1,17 +1,22 @@
-from sqlalchemy.orm import Session
 from app.domain.entities.os import OrdemDeServico, ItemOS, StatusOS
-from app.domain.entities.catalogo import Servico
-from app.domain.entities.estoque import Peca
 from app.domain.exceptions import NotFoundException, BusinessRuleException
 
 
 class CriarOSUseCase:
-    """Orquestra a criação de uma Ordem de Serviço com validações de domínio."""
+    """Orquestra a criação de uma Ordem de Serviço com validações de domínio.
 
-    def __init__(self, db: Session, catalogo_repo, estoque_repo):
-        self._db = db
+    Ao final, dispara (via porta de saída `EmailNotificacaoPort`) a notificação
+    de aprovação pendente ao cliente — o e-mail cuja resposta chega depois no
+    `/webhooks/email`. O notificador é injetado; o use case não conhece o meio
+    de entrega (SMTP, simulação, etc.).
+    """
+
+    def __init__(self, os_repo, catalogo_repo, estoque_repo, cliente_repo=None, notificador=None):
+        self._os_repo = os_repo
         self._catalogo = catalogo_repo
         self._estoque = estoque_repo
+        self._cliente_repo = cliente_repo
+        self._notificador = notificador
 
     def executar(self, cliente_id, veiculo_id, servicos, pecas) -> OrdemDeServico:
         itens = []
@@ -41,13 +46,26 @@ class CriarOSUseCase:
             veiculo_id=veiculo_id,
             status=StatusOS.AGUARDANDO_APROVACAO,
         )
-        self._db.add(os)
-        self._db.flush()
+        self._os_repo.adicionar(os)
+        self._os_repo.flush()
         for item in itens:
             item.os_id = os.id
-            self._db.add(item)
-        self._db.flush()
+            self._os_repo.adicionar(item)
+        self._os_repo.flush()
         os.recalcular_total()
-        self._db.commit()
-        self._db.refresh(os)
+        self._os_repo.commit()
+        self._os_repo.refresh(os)
+
+        self._notificar_aprovacao_pendente(os, cliente_id)
         return os
+
+    def _notificar_aprovacao_pendente(self, os: OrdemDeServico, cliente_id) -> None:
+        """Dispara o e-mail (simulado) de aprovação. Best-effort: nunca quebra a criação da OS."""
+        if not self._notificador:
+            return
+        destinatario = "cliente"
+        if self._cliente_repo:
+            cliente = self._cliente_repo.buscar_por_id(cliente_id)
+            if cliente:
+                destinatario = cliente.email or cliente.telefone
+        self._notificador.notificar_aprovacao_pendente(os.id, destinatario)

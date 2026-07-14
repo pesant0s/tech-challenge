@@ -19,8 +19,9 @@ Sistema de gestão de ordens de serviço para oficinas mecânicas — **Fase 2: 
                       │ chama Ports de entrada
 ┌─────────────────────▼───────────────────────────────────────────┐
 │                     APPLICATION (Use Cases)                      │
-│  CriarOS · ListarOS · AtualizarStatus · AprovarOS               │
-│  RejeitarOS · ProcessarWebhookEmail                             │
+│  CriarOS · ListarOS · AtualizarStatus · AprovarOS · RejeitarOS  │
+│  ProcessarWebhookEmail · GerenciarCatalogo · GerenciarEstoque   │
+│  GerenciarClientes · GerenciarVeiculos                          │
 │                                                                  │
 │  ┌─────────────────────────────────────────────────────────┐    │
 │  │                       DOMAIN                            │    │
@@ -32,16 +33,75 @@ Sistema de gestão de ordens de serviço para oficinas mecânicas — **Fase 2: 
                       │ chama Ports de saída
 ┌─────────────────────▼───────────────────────────────────────────┐
 │                     OUTBOUND ADAPTERS                            │
-│  OSRepositoryAdapter · ClienteRepositoryAdapter                  │
-│  VeiculoRepositoryAdapter · EstoqueRepositoryAdapter             │
-│  (SQLAlchemy 2.0 + PostgreSQL 16)                               │
+│  Persistência: OSRepository · ClienteRepository · VeiculoRepo    │
+│  CatalogoRepository · EstoqueRepository (SQLAlchemy 2.0)          │
+│  Notificação: EmailSimuladoAdapter  ⇢ EmailNotificacaoPort        │
+│  (mapeamento ORM imperativo — domínio permanece puro)            │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-**Regra de Dependência:** domínio não importa nenhuma camada externa. Exceções são Python puro (sem HTTPException). Use cases orquestram sem saber de HTTP ou SQL.
+**Regra de Dependência:** as entidades de domínio são **Python puro** — não importam SQLAlchemy, FastAPI nem qualquer infraestrutura (`import app.domain.entities.os` não carrega `sqlalchemy`). O mapeamento objeto-relacional vive em `app/infrastructure/orm_mapping.py` via **imperative mapping** (`registry.map_imperatively`), mantendo o domínio persistence-ignorant. Os value objects (`AcaoWebhook`, `CpfCnpj`, `Placa`) também vivem no domínio.
+
+**Camada de aplicação:** todos os contextos (OS, cadastro, catálogo, estoque) passam por use cases; as rotas HTTP apenas traduzem entrada/saída. Use cases dependem só das portas (repositórios e `EmailNotificacaoPort`) por duck typing — sem importar SQLAlchemy nem HTTP. Ao criar uma OS, o use case dispara pela porta de saída o e-mail (simulado) de aprovação, cuja resposta retorna pelo `/webhooks/email`.
 
 📐 **Diagramas completos (Hexagonal + Domain Storytelling + Context Map + Event Storming):**
 https://excalidraw.com/#json=YiqDfj5ohxRVljjCtpOmT,h404BjQ8sBouPa8R7suTnw
+
+---
+
+## Infraestrutura e Fluxo de Deploy
+
+```
+  Desenvolvedor
+       │
+       ├─ docker compose up ──────────────────────────────────────────────┐
+       │                                                                   ▼
+       │                                                         [ Dev local ]
+       │                                                     FastAPI :8000 + Postgres
+       │
+       └─ git push develop/main ──► GitHub Actions ─────────────────────────────────┐
+                                                                                      │
+                                  ┌───────────────────────────────────────────────────▼──┐
+                                  │                  Pipeline CI/CD                       │
+                                  │  job test      → pytest 101 testes + coverage         │
+                                  │                → kubectl --dry-run (valida manifests) │
+                                  │                                                        │
+                                  │  job deploy-k8s (main) → Kind cluster                 │
+                                  │    ├── kubectl apply k8s/postgres/ (StatefulSet + PVC)│
+                                  │    ├── kubectl apply k8s/          (Deployment + HPA) │
+                                  │    └── smoke test GET /health                         │
+                                  │                                                        │
+                                  │  job build-and-push (main, após deploy) → GHCR        │
+                                  │    └── ghcr.io/pesant0s/tech-challenge:latest          │
+                                  └────────────────────────────────────────────────────────┘
+                                                         │
+                                           (deploy manual minikube / Terraform)
+                                                         │
+                                  ┌──────────────────────▼──────────────────────────────┐
+                                  │         Kubernetes cluster (minikube / cloud)        │
+                                  │  namespace: oficina                                   │
+                                  │                                                       │
+                                  │  ┌─────────────────────┐   ┌──────────────────────┐  │
+                                  │  │  Deployment API      │   │  StatefulSet Postgres│  │
+                                  │  │  réplicas: 2 (→5)   │   │  PostgreSQL 16       │  │
+                                  │  │  HPA CPU 70%         │   │  PVC 1Gi            │  │
+                                  │  │  readinessProbe /health   └──────────┬───────────┘  │
+                                  │  └────────────┬────────┘              │               │
+                                  │               │ ClusterIP              │ headless svc  │
+                                  │  ┌────────────▼────────┐   ┌──────────▼──────────┐  │
+                                  │  │ Service NodePort     │   │ Service postgres-svc│  │
+                                  │  │ :30080 → :8000      │   │ ClusterIP None:5432 │  │
+                                  │  └─────────────────────┘   └─────────────────────┘  │
+                                  │                                                       │
+                                  │  ConfigMap: ALGORITHM, CORS   Secret: DATABASE_URL,  │
+                                  │                               SECRET_KEY, WEBHOOK_SECRET│
+                                  │                                                       │
+                                  │  Terraform (infra/) gerencia todos os recursos acima │
+                                  └───────────────────────────────────────────────────────┘
+                                                         │
+                                                   :30080/docs
+                                                  Swagger UI
+```
 
 ---
 
@@ -60,6 +120,19 @@ https://excalidraw.com/#json=YiqDfj5ohxRVljjCtpOmT,h404BjQ8sBouPa8R7suTnw
 | IaC            | Terraform (provider kubernetes)       |
 | CI/CD          | GitHub Actions + GHCR                 |
 | Testes         | pytest 101 testes · SQLite in-memory  |
+
+---
+
+## Documentação da API (Swagger)
+
+A documentação interativa completa está disponível em:
+
+| Ambiente | URL |
+|----------|-----|
+| Local (Docker Compose) | http://localhost:8000/docs |
+| Kubernetes (minikube) | `http://$(minikube ip):30080/docs` |
+
+O Swagger inclui todos os endpoints com schemas, exemplos de payload e autenticação integrada. Clique em **Authorize 🔒**, cole o token JWT obtido em `POST /auth/token` e execute qualquer rota direto pelo navegador.
 
 ---
 
@@ -315,21 +388,25 @@ pytest tests/ --cov=app --cov-report=term-missing
 
 ```
 app/
-├── domain/
-│   ├── entities/           # OrdemDeServico, Cliente, Veiculo, Peca, Servico
-│   ├── value_objects/      # CpfCnpj, Placa
+├── domain/                     # PURO — nenhum import de SQLAlchemy/FastAPI
+│   ├── entities/           # OrdemDeServico, Cliente, Veiculo, Peca, Servico, Usuario
+│   ├── value_objects/      # CpfCnpj, Placa, AcaoWebhook
+│   ├── ports/              # OSRepositoryPort, EmailNotificacaoPort
 │   └── exceptions.py       # Exceções Python puras (sem HTTPException)
 ├── application/
 │   └── use_cases/          # CriarOS, AtualizarStatus, AprovarOS, RejeitarOS,
-│                           # ProcessarWebhookEmail, ListarOS
+│                           # ProcessarWebhookEmail, ListarOS, GerenciarCatalogo,
+│                           # GerenciarEstoque, GerenciarClientes/Veiculos
 ├── adapters/
 │   ├── inbound/
-│   │   └── http/           # *_routes.py, *_schemas.py, webhook_routes.py
+│   │   └── http/           # *_routes.py (finos), *_schemas.py, webhook_routes.py
 │   └── outbound/
-│       └── persistence/    # *_repository.py (SQLAlchemy)
+│       ├── persistence/    # *_repository.py (adapters SQLAlchemy)
+│       └── notifications/  # email_simulado.py (EmailNotificacaoPort)
 └── infrastructure/
     ├── config.py           # Settings (pydantic-settings)
-    ├── database.py         # Session factory
+    ├── database.py         # registry + Session factory
+    ├── orm_mapping.py      # Mapeamento imperativo domínio ↔ tabelas
     └── security.py         # JWT utils
 
 k8s/                        # Manifestos Kubernetes

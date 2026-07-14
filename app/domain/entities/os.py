@@ -1,12 +1,7 @@
 import enum
 from datetime import datetime, timezone
 from decimal import Decimal
-from sqlalchemy import Column, String, Numeric, ForeignKey, Integer, DateTime, Enum
-from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import relationship
-from sqlalchemy.sql import func
-import uuid
-from app.infrastructure.database import Base
+
 from app.domain.exceptions import BusinessRuleException
 
 
@@ -21,24 +16,24 @@ class StatusOS(str, enum.Enum):
     ABANDONADA = "ABANDONADA"
 
 
-class ItemOS(Base):
-    __tablename__ = "itens_os"
+class ItemOS:
+    """Item de uma Ordem de Serviço (um serviço OU uma peça). Entidade pura."""
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    os_id = Column(UUID(as_uuid=True), ForeignKey("ordens_servico.id"), nullable=False, index=True)
-    servico_id = Column(UUID(as_uuid=True), ForeignKey("servicos.id"), nullable=True)
-    peca_id = Column(UUID(as_uuid=True), ForeignKey("pecas.id"), nullable=True)
-    quantidade = Column(Integer, nullable=False, default=1)
-    preco_unitario = Column(Numeric(10, 2), nullable=False)
-
-    os = relationship("OrdemDeServico", back_populates="itens")
+    def __init__(self, quantidade=1, preco_unitario=None, servico_id=None,
+                 peca_id=None, os_id=None, id=None):
+        self.id = id
+        self.os_id = os_id
+        self.servico_id = servico_id
+        self.peca_id = peca_id
+        self.quantidade = quantidade
+        self.preco_unitario = preco_unitario
 
     def calcular_subtotal(self) -> Decimal:
         return Decimal(str(self.preco_unitario)) * self.quantidade
 
 
-class OrdemDeServico(Base):
-    __tablename__ = "ordens_servico"
+class OrdemDeServico:
+    """Ordem de Serviço com máquina de estados de negócio. Entidade de domínio pura."""
 
     TRANSICOES_VALIDAS: dict[StatusOS, list[StatusOS]] = {
         StatusOS.AGUARDANDO_APROVACAO: [StatusOS.RECEBIDA, StatusOS.NEGADA, StatusOS.ABANDONADA],
@@ -51,16 +46,16 @@ class OrdemDeServico(Base):
         StatusOS.ABANDONADA:           [],
     }
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    cliente_id = Column(UUID(as_uuid=True), ForeignKey("clientes.id"), nullable=False, index=True)
-    veiculo_id = Column(UUID(as_uuid=True), ForeignKey("veiculos.id"), nullable=False)
-    status = Column(Enum(StatusOS), nullable=False, default=StatusOS.AGUARDANDO_APROVACAO, index=True)
-    valor_total = Column(Numeric(10, 2), nullable=True)
-    criado_em = Column(DateTime(timezone=True), server_default=func.now())
-    iniciado_em = Column(DateTime(timezone=True), nullable=True)
-    finalizado_em = Column(DateTime(timezone=True), nullable=True)
-
-    itens = relationship("ItemOS", back_populates="os")
+    def __init__(self, cliente_id=None, veiculo_id=None, status=StatusOS.AGUARDANDO_APROVACAO,
+                 valor_total=None, criado_em=None, iniciado_em=None, finalizado_em=None, id=None):
+        self.id = id
+        self.cliente_id = cliente_id
+        self.veiculo_id = veiculo_id
+        self.status = status
+        self.valor_total = valor_total
+        self.criado_em = criado_em
+        self.iniciado_em = iniciado_em
+        self.finalizado_em = finalizado_em
 
     def pode_transicionar_para(self, novo_status: StatusOS) -> bool:
         return novo_status in self.TRANSICOES_VALIDAS.get(self.status, [])
