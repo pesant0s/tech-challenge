@@ -10,4 +10,5 @@ htmlcov/
 .coverage
 *.db
 .DS_Store
-ROTEIRO_VIDEO.md
+*VIDEO.md
+entrega-tech-challenge.docx
