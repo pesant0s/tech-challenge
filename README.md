@@ -6,6 +6,14 @@ Sistema de gestão de ordens de serviço para oficinas mecânicas — **Fase 2: 
 
 > Pós-Tech Software Architecture — FIAP
 
+> **Fase 03 em outros repositórios.** A partir da Fase 03, a solução foi segregada em quatro
+> repositórios, cada um com o próprio pipeline:
+> [tech-challenge-app](https://github.com/pesant0s/tech-challenge-app),
+> [tech-challenge-infra-db](https://github.com/pesant0s/tech-challenge-infra-db),
+> [tech-challenge-infra-k8s](https://github.com/pesant0s/tech-challenge-infra-k8s) e
+> [tech-challenge-auth-lambda](https://github.com/pesant0s/tech-challenge-auth-lambda).
+> Este repositório guarda as entregas das Fases 01 e 02.
+
 ---
 
 ## Arquitetura Hexagonal (Ports & Adapters)
